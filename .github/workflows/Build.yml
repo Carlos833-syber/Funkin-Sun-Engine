@@ -27,64 +27,67 @@ jobs:
         with:
           haxe-version: "4.3.7"
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
+
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-29"
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
           sdkmanager "ndk;29.0.13113456"
 
-      - name: Configure Android environment
+      - name: Android environment
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
-      - name: Install Haxelib
+      - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
       - name: Install HMM
         run: |
           haxelib install hmm
+
+      - name: Install project dependencies
+        run: |
           haxelib run hmm install
 
-      - name: Show installed Haxelib packages
+      - name: Show Haxelib
         run: |
           haxelib list
 
-      - name: Setup Lime
+      - name: Remove Git Lime
         run: |
-          haxelib run lime setup
+          haxelib remove lime || true
+
+      - name: Install Lime release
+        run: |
+          haxelib install lime
+
+      - name: Check Lime
+        run: |
+          haxelib list lime
+          haxelib libpath lime
 
       - name: Rebuild Lime native tools
         run: |
           haxelib run lime rebuild cpp
 
-      - name: Verify Lime
-        run: |
-          echo "Lime location:"
-          haxelib libpath lime
-
-          echo "Searching for lime.ndll:"
-          find ~/.haxelib .haxelib -name "lime.ndll" -type f 2>/dev/null || true
-
-      - name: Setup Android Lime
+      - name: Setup Lime Android
         run: |
           haxelib run lime setup android
 
-      - name: Build Android
+      - name: Build Android APK
         run: |
           haxelib run lime build android -release -DEXCLUDE_ARMV7
 
       - name: Find APK
         run: |
-          echo "APK files:"
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
