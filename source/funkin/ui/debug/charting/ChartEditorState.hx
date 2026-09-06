@@ -7203,6 +7203,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         if (f != null) f.focus = false;
       }
 
+      writePreferences(false);
       performCleanup();
 
       FlxG.switchState(() -> new CameraEditorState({
