@@ -1,14 +1,13 @@
-name: Build Funkin-Sun Engine Android
+name: Build Android APK
 
 on:
   push:
     branches:
-      - main
-
+      - "**"
   workflow_dispatch:
 
 jobs:
-  android:
+  build-android:
     runs-on: ubuntu-22.04
 
     steps:
@@ -21,49 +20,77 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
-          haxe-version: '4.3.7'
+          haxe-version: "4.3.7"
 
-      - name: Setup Android
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
+          yes | sdkmanager --licenses || true
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-29"
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
           sdkmanager "ndk;29.0.13113456"
 
-      - name: Setup Haxelib
+      - name: Configure Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Install Haxelib
         run: |
           haxelib setup ~/haxelib
-          haxelib install hmm
-          haxelib install lime
-          haxelib run lime setup
 
-      - name: Install dependencies
+      - name: Install HMM
         run: |
+          haxelib install hmm
           haxelib run hmm install
 
-      - name: Build Funkin-Sun Engine
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/29.0.13113456
+      - name: Show installed Haxelib packages
         run: |
-          haxelib run lime build android -release
+          haxelib list
 
-      - name: Locate APK
+      - name: Setup Lime
         run: |
-          find export -type f -name "*.apk" -print
+          haxelib run lime setup
+
+      - name: Rebuild Lime native tools
+        run: |
+          haxelib run lime rebuild cpp
+
+      - name: Verify Lime
+        run: |
+          echo "Lime location:"
+          haxelib libpath lime
+
+          echo "Searching for lime.ndll:"
+          find ~/.haxelib .haxelib -name "lime.ndll" -type f 2>/dev/null || true
+
+      - name: Setup Android Lime
+        run: |
+          haxelib run lime setup android
+
+      - name: Build Android
+        run: |
+          haxelib run lime build android -release -DEXCLUDE_ARMV7
+
+      - name: Find APK
+        run: |
+          echo "APK files:"
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Funkin-Sun-Engine-Android
-          path: export/**/*.apk
+          name: Funkin-Sun-Android
+          path: |
+            **/*.apk
           if-no-files-found: error
