@@ -8,7 +8,6 @@ import flixel.input.FlxInput;
 import flixel.input.IFlxInput;
 import flixel.input.touch.FlxTouch;
 import flixel.math.FlxPoint;
-import flixel.util.FlxDestroyUtil;
 import flixel.util.FlxSignal;
 import openfl.display.Graphics;
 import haxe.ds.Map;
@@ -28,7 +27,8 @@ enum abstract FunkinButtonStatus(Int) from Int to Int
 #if !display
 @:generic
 #end
-@:allow(funkin.mobile.ui.FunkinHitbox) @:allow(funkin.mobile.ui.FunkinButton)
+@:allow(funkin.mobile.ui.FunkinHitbox)
+@:allow(funkin.mobile.ui.FunkinButton)
 class FunkinButton extends FunkinSprite implements IFlxInput
 {
   /**
@@ -37,22 +37,22 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   public static var buttonsTouchID:Map<Int, FunkinButton> = new Map();
 
   /**
-   * The current state of the button, either `FunkinButtonStatus.NORMAL` or `FunkinButtonStatus.PRESSED`.
+   * The current state of the button.
    */
   public var status:FunkinButtonStatus;
 
   /**
-   * The callback function to call when the button is released.
+   * Called when the button is released.
    */
   public var onUp(default, null):FlxSignal = new FlxSignal();
 
   /**
-   * The callback function to call when the button is pressed down.
+   * Called when the button is pressed down.
    */
   public var onDown(default, null):FlxSignal = new FlxSignal();
 
   /**
-   * The callback function to call when the button is no longer hovered over.
+   * Called when the button is no longer hovered over.
    */
   public var onOut(default, null):FlxSignal = new FlxSignal();
 
@@ -82,144 +82,208 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   public var currentTouch(get, never):Null<FlxTouch>;
 
   /**
-   * An array of objects that blocks your input.
+   * Objects that block the button input.
    */
   public var deadZones:Array<FunkinSprite> = [];
 
   /**
-   * Whether the button should be released if you swiped over somewhere else.
+   * Whether the button should be released if the touch leaves its bounds.
    */
   public var limitToBounds:Bool = true;
 
   /**
-   * A radius for circular buttons.
-   * If this radius is larger than 0 then the overlap check will look if the touch point is inside this radius.
+   * Radius for circular buttons.
    */
   public var radius:Float = 0;
 
   /**
-   * The vertices of the polygon defining the button's hitbox.
-   * The array should contain points in the format: [x1, y1, x2, y2, ...].
-   * If the array is empty, the polygon is ignored, and the default hitbox is used.
+   * Polygon hitbox.
    */
   public var polygon:Null<Array<Float>> = null;
 
   /**
-   * The input associated with the button, using `Int` as the type.
+   * Input associated with this button.
    */
   var input:FlxInput<Int>;
 
   /**
-   * The input currently pressing this button, if none, it's `null`.
-   * Needed to check for its release.
+   * Input currently pressing this button.
    */
   var currentInput:IFlxInput;
 
   /**
-   * The ID of the touch object that pressed this button.
+   * ID of the touch currently pressing this button.
    */
   var touchID:Int = -1;
 
   /**
-   * Whether the button should skip calling onDownHandler() on touch.pressed.
+   * Whether onDownHandler() should be ignored.
    */
   public var ignoreDownHandler:Bool = false;
 
   /**
-   * Creates a new `FunkinButton` object.
-   *
-   * @param x The x position of the button.
-   * @param y The y position of the button.
+   * Creates a new FunkinButton.
    */
   public function new(x:Float = 0, y:Float = 0):Void
   {
     super(x, y);
 
     status = FunkinButtonStatus.NORMAL;
+
     solid = false;
     immovable = true;
+
     #if FLX_DEBUG
     ignoreDrawDebug = true;
     #end
+
     scrollFactor.set();
+
     input = new FlxInput(0);
   }
 
   /**
-   * Called by the game state when the state is changed (if this object belongs to the state).
+   * Called when the button is destroyed.
+   *
+   * Fixed to safely remove the button from the active touch map
+   * and release its input before destroying the sprite.
    */
   override public function destroy():Void
   {
-    deadZones = [];
+    // Make sure this button is removed from the touch map.
+    if (touchID >= 0)
+    {
+      if (buttonsTouchID.exists(touchID) && buttonsTouchID.get(touchID) == this)
+      {
+        buttonsTouchID.remove(touchID);
+      }
+
+      touchID = -1;
+    }
+
+    // Release the input before destroying it.
+    if (input != null)
+    {
+      input.release();
+      input = null;
+    }
+
+    // Remove the current input reference.
     currentInput = null;
-    input = null;
 
-    buttonsTouchID.remove(touchID);
+    // Clear dead zones.
+    deadZones = [];
 
-    touchID = -1;
+    // Reset the button state.
+    status = FunkinButtonStatus.NORMAL;
 
     super.destroy();
   }
 
   /**
-   * Called by the game loop automatically, handles touch over and click detection.
+   * Handles touch input.
    */
   override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
     #if FLX_POINTER_INPUT
-    // Update the button, but only if touches are enabled
     if (visible)
     {
       final overlapFound:Bool = checkTouchOverlap();
-      final touchReleased:Bool = (currentTouch != null && currentTouch.justReleased);
 
-      if ((currentInput != null && currentInput.justReleased || (!limitToBounds && touchReleased)) && overlapFound)
+      final touchReleased:Bool =
+        (currentTouch != null && currentTouch.justReleased);
+
+      if (
+        (currentInput != null && currentInput.justReleased
+        || (!limitToBounds && touchReleased))
+        && overlapFound
+      )
       {
         onUpHandler();
       }
 
-      if (status != FunkinButtonStatus.NORMAL && (!overlapFound || (currentInput != null && currentInput.justReleased)))
+      if (
+        status != FunkinButtonStatus.NORMAL
+        && (!overlapFound
+        || (currentInput != null && currentInput.justReleased))
+      )
       {
-        if (limitToBounds || (!limitToBounds && touchReleased)) onOutHandler();
+        if (limitToBounds || (!limitToBounds && touchReleased))
+        {
+          onOutHandler();
+        }
       }
     }
     #end
 
-    input.update();
+    if (input != null)
+    {
+      input.update();
+    }
   }
 
+  /**
+   * Checks whether a touch overlaps this button.
+   */
   function checkTouchOverlap(?touch:FlxTouch):Bool
   {
-    final touches:Array<FlxTouch> = touch == null ? FlxG.touches.list : [touch];
+    final touches:Array<FlxTouch> =
+      touch == null ? FlxG.touches.list : [touch];
 
     for (camera in cameras)
     {
       for (touch in touches)
       {
-        final worldPos:FlxPoint = touch.getWorldPosition(camera, _point);
+        final worldPos:FlxPoint =
+          touch.getWorldPosition(camera, _point);
 
         for (zone in deadZones)
         {
-          if (zone != null && zone.overlapsPoint(worldPos, true, camera)) return false;
+          if (
+            zone != null
+            && zone.overlapsPoint(worldPos, true, camera)
+          )
+          {
+            return false;
+          }
         }
 
         function updateTouchID():Void
         {
           touchID = touch.touchPointID;
-          if (buttonsTouchID.exists(touchID) && buttonsTouchID.get(touchID) != this)
-          {
-            final prevButton:Null<FunkinButton> = buttonsTouchID.get(touchID);
 
-            if (input != null && prevButton != null && prevButton.input != null && !prevButton.limitToBounds) prevButton.onOutHandler();
+          if (
+            buttonsTouchID.exists(touchID)
+            && buttonsTouchID.get(touchID) != this
+          )
+          {
+            final prevButton:Null<FunkinButton> =
+              buttonsTouchID.get(touchID);
+
+            if (
+              input != null
+              && prevButton != null
+              && prevButton.input != null
+              && !prevButton.limitToBounds
+            )
+            {
+              prevButton.onOutHandler();
+            }
           }
+
           buttonsTouchID.set(touchID, this);
 
           updateStatus(touch);
         }
 
-        if (polygon != null && polygon.length >= 6 && polygon.length % 2 == 0)
+        // Polygon hitbox.
+        if (
+          polygon != null
+          && polygon.length >= 6
+          && polygon.length % 2 == 0
+        )
         {
           if (polygonOverlapsPoint(worldPos, false, camera))
           {
@@ -227,6 +291,7 @@ class FunkinButton extends FunkinSprite implements IFlxInput
             return true;
           }
         }
+        // Circle hitbox.
         else if (radius > 0)
         {
           if (circleOverlapsPoint(worldPos, camera))
@@ -235,6 +300,7 @@ class FunkinButton extends FunkinSprite implements IFlxInput
             return true;
           }
         }
+        // Default rectangular hitbox.
         else
         {
           if (overlapsPoint(worldPos, true, camera))
@@ -249,49 +315,117 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     return false;
   }
 
-  function circleOverlapsPoint(point:FlxPoint, ?camera:FlxCamera):Bool
+  /**
+   * Checks circular hitbox collision.
+   */
+  function circleOverlapsPoint(
+    point:FlxPoint,
+    ?camera:FlxCamera
+  ):Bool
   {
-    if (camera == null) camera = FlxG.camera;
+    if (camera == null)
+    {
+      camera = FlxG.camera;
+    }
 
-    final xPos = point.x - camera.scroll.x;
-    final yPos = point.y - camera.scroll.y;
+    final xPos:Float = point.x - camera.scroll.x;
+    final yPos:Float = point.y - camera.scroll.y;
+
     getScreenPosition(_point, camera);
+
     point.putWeak();
 
-    final distanceX = xPos - (_point.x + (width / 2));
-    final distanceY = yPos - (_point.y + (height / 2));
-    final distance = Math.sqrt((distanceX * distanceX) + (distanceY * distanceY));
+    final distanceX:Float =
+      xPos - (_point.x + (width / 2));
+
+    final distanceY:Float =
+      yPos - (_point.y + (height / 2));
+
+    final distance:Float =
+      Math.sqrt(
+        (distanceX * distanceX)
+        + (distanceY * distanceY)
+      );
 
     return distance <= radius;
   }
 
-  function polygonOverlapsPoint(point:FlxPoint, inScreenSpace:Bool = false, ?camera:FlxCamera):Bool
+  /**
+   * Checks polygon hitbox collision.
+   */
+  function polygonOverlapsPoint(
+    point:FlxPoint,
+    inScreenSpace:Bool = false,
+    ?camera:FlxCamera
+  ):Bool
   {
-    if (polygon == null || polygon.length < 6 || polygon.length % 2 != 0) return false;
+    if (
+      polygon == null
+      || polygon.length < 6
+      || polygon.length % 2 != 0
+    )
+    {
+      return false;
+    }
 
-    if (!inScreenSpace) return isPointInPolygon(polygon, point, FlxPoint.weak(x, y));
+    if (!inScreenSpace)
+    {
+      return isPointInPolygon(
+        polygon,
+        point,
+        FlxPoint.weak(x, y)
+      );
+    }
 
-    if (camera == null) camera = FlxG.camera;
+    if (camera == null)
+    {
+      camera = FlxG.camera;
+    }
 
-    final pos:FlxPoint = FlxPoint.weak(point.x - camera.scroll.x, point.y - camera.scroll.y);
+    final pos:FlxPoint = FlxPoint.weak(
+      point.x - camera.scroll.x,
+      point.y - camera.scroll.y
+    );
 
     point.putWeak();
 
-    return isPointInPolygon(polygon, pos, getScreenPosition(_point, camera));
+    return isPointInPolygon(
+      polygon,
+      pos,
+      getScreenPosition(_point, camera)
+    );
   }
 
-  static function isPointInPolygon(vertices:Array<Float>, point:FlxPoint, ?offset:FlxPoint):Bool
+  /**
+   * Point-in-polygon calculation.
+   */
+  static function isPointInPolygon(
+    vertices:Array<Float>,
+    point:FlxPoint,
+    ?offset:FlxPoint
+  ):Bool
   {
-    if (offset == null) offset = FlxPoint.weak();
+    if (offset == null)
+    {
+      offset = FlxPoint.weak();
+    }
 
     var inside:Bool = false;
 
-    final numsPoints:Int = Math.floor(vertices.length / 2);
+    final numsPoints:Int =
+      Math.floor(vertices.length / 2);
 
     for (i in 0...numsPoints)
     {
-      final vertex1:FlxPoint = FlxPoint.weak(vertices[i * 2] + offset.x, vertices[i * 2 + 1] + offset.y);
-      final vertex2:FlxPoint = FlxPoint.weak(vertices[(i + 1) % numsPoints * 2] + offset.x, vertices[(i + 1) % numsPoints * 2 + 1] + offset.y);
+      final vertex1:FlxPoint = FlxPoint.weak(
+        vertices[i * 2] + offset.x,
+        vertices[i * 2 + 1] + offset.y
+      );
+
+      final vertex2:FlxPoint = FlxPoint.weak(
+        vertices[(i + 1) % numsPoints * 2] + offset.x,
+        vertices[(i + 1) % numsPoints * 2 + 1] + offset.y
+      );
 
       if (checkRayIntersection(vertex1, vertex2, point))
       {
@@ -305,10 +439,26 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     return inside;
   }
 
-  static inline function checkRayIntersection(vertex1:FlxPoint, vertex2:FlxPoint, point:FlxPoint):Bool
+  /**
+   * Checks ray intersection.
+   */
+  static inline function checkRayIntersection(
+    vertex1:FlxPoint,
+    vertex2:FlxPoint,
+    point:FlxPoint
+  ):Bool
   {
-    final result:Bool = (vertex1.y > point.y) != (vertex2.y > point.y)
-      && point.x < (vertex1.x + ((point.y - vertex1.y) / (vertex2.y - vertex1.y)) * (vertex2.x - vertex1.x));
+    final result:Bool =
+      (vertex1.y > point.y) != (vertex2.y > point.y)
+      && point.x <
+        (
+          vertex1.x
+          + (
+            (point.y - vertex1.y)
+            / (vertex2.y - vertex1.y)
+          )
+          * (vertex2.x - vertex1.x)
+        );
 
     vertex1.putWeak();
     vertex2.putWeak();
@@ -316,11 +466,26 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     return result;
   }
 
+  /**
+   * Checks whether the button is pressed.
+   */
   function isPressed(check:Bool):Bool
   {
-    return !(status != FunkinButtonStatus.NORMAL && (!check || (currentInput != null && currentInput.justReleased)));
+    return !(
+      status != FunkinButtonStatus.NORMAL
+      && (
+        !check
+        || (
+          currentInput != null
+          && currentInput.justReleased
+        )
+      )
+    );
   }
 
+  /**
+   * Updates the button status.
+   */
   function updateStatus(newInput:IFlxInput):Void
   {
     if (newInput.justPressed)
@@ -329,7 +494,10 @@ class FunkinButton extends FunkinSprite implements IFlxInput
 
       onDownHandler();
     }
-    else if (status == FunkinButtonStatus.NORMAL && !ignoreDownHandler)
+    else if (
+      status == FunkinButtonStatus.NORMAL
+      && !ignoreDownHandler
+    )
     {
       if (newInput.pressed)
       {
@@ -338,71 +506,147 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     }
   }
 
+  /**
+   * Handles button release.
+   */
   function onUpHandler():Void
   {
     status = FunkinButtonStatus.NORMAL;
 
-    input.release();
+    if (input != null)
+    {
+      input.release();
+    }
 
-    buttonsTouchID.remove(touchID);
+    if (touchID >= 0)
+    {
+      if (
+        buttonsTouchID.exists(touchID)
+        && buttonsTouchID.get(touchID) == this
+      )
+      {
+        buttonsTouchID.remove(touchID);
+      }
 
-    touchID = -1;
+      touchID = -1;
+    }
 
     currentInput = null;
 
     onUp.dispatch();
   }
 
+  /**
+   * Handles button press.
+   */
   function onDownHandler():Void
   {
     status = FunkinButtonStatus.PRESSED;
 
-    input.press();
+    if (input != null)
+    {
+      input.press();
+    }
 
     onDown.dispatch();
   }
 
+  /**
+   * Handles pointer leaving the button.
+   */
   function onOutHandler():Void
   {
     status = FunkinButtonStatus.NORMAL;
 
-    input.release();
+    if (input != null)
+    {
+      input.release();
+    }
 
-    buttonsTouchID.remove(touchID);
+    if (touchID >= 0)
+    {
+      if (
+        buttonsTouchID.exists(touchID)
+        && buttonsTouchID.get(touchID) == this
+      )
+      {
+        buttonsTouchID.remove(touchID);
+      }
 
-    touchID = -1;
+      touchID = -1;
+    }
+
+    currentInput = null;
 
     onOut.dispatch();
   }
 
   #if FLX_DEBUG
-  override public function drawDebugOnCamera(camera:FlxCamera):Void
+
+  override public function drawDebugOnCamera(
+    camera:FlxCamera
+  ):Void
   {
-    if (polygon != null && polygon.length >= 6 && polygon.length % 2 == 0)
+    if (
+      polygon != null
+      && polygon.length >= 6
+      && polygon.length % 2 == 0
+    )
     {
-      if (!camera.visible || !camera.exists || !isOnScreen(camera)) return;
+      if (
+        !camera.visible
+        || !camera.exists
+        || !isOnScreen(camera)
+      )
+      {
+        return;
+      }
 
       getScreenPosition(_point, camera);
 
-      final gfx:Graphics = beginDrawDebug(camera);
+      final gfx:Graphics =
+        beginDrawDebug(camera);
 
-      final boundingBoxColor:Null<FlxColor> = getDebugBoundingBoxColor(allowCollisions);
+      final boundingBoxColor:Null<FlxColor> =
+        getDebugBoundingBoxColor(allowCollisions);
 
-      if (boundingBoxColor != null) drawDebugPolygonColor(gfx, polygon, boundingBoxColor);
+      if (boundingBoxColor != null)
+      {
+        drawDebugPolygonColor(
+          gfx,
+          polygon,
+          boundingBoxColor
+        );
+      }
 
       endDrawDebug(camera);
     }
     else if (radius > 0)
     {
-      if (!camera.visible || !camera.exists || !isOnScreen(camera)) return;
+      if (
+        !camera.visible
+        || !camera.exists
+        || !isOnScreen(camera)
+      )
+      {
+        return;
+      }
 
       getScreenPosition(_point, camera);
 
-      final gfx:Graphics = beginDrawDebug(camera);
+      final gfx:Graphics =
+        beginDrawDebug(camera);
 
-      final boundingBoxColor:Null<FlxColor> = getDebugBoundingBoxColor(allowCollisions);
+      final boundingBoxColor:Null<FlxColor> =
+        getDebugBoundingBoxColor(allowCollisions);
 
-      if (boundingBoxColor != null) drawDebugCircleColor(gfx, boundingBoxColor);
+      if (boundingBoxColor != null)
+      {
+        drawDebugCircleColor(
+          gfx,
+          boundingBoxColor
+        );
+      }
 
       endDrawDebug(camera);
     }
@@ -412,13 +656,30 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     }
   }
 
-  function drawDebugCircleColor(gfx:Graphics, color:FlxColor):Void
+  /**
+   * Draws circular debug hitbox.
+   */
+  function drawDebugCircleColor(
+    gfx:Graphics,
+    color:FlxColor
+  ):Void
   {
     gfx.lineStyle(2, color, 0.75);
-    gfx.drawCircle(radius, radius, radius);
+    gfx.drawCircle(
+      radius,
+      radius,
+      radius
+    );
   }
 
-  function drawDebugPolygonColor(gfx:Graphics, vertices:Array<Float>, color:FlxColor):Void
+  /**
+   * Draws polygon debug hitbox.
+   */
+  function drawDebugPolygonColor(
+    gfx:Graphics,
+    vertices:Array<Float>,
+    color:FlxColor
+  ):Void
   {
     gfx.lineStyle(2, color, 0.75);
 
@@ -426,38 +687,65 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     {
       if (i == 0)
       {
-        gfx.moveTo(vertices[i * 2] + _point.x, vertices[i * 2 + 1] + _point.y);
+        gfx.moveTo(
+          vertices[i * 2] + _point.x,
+          vertices[i * 2 + 1] + _point.y
+        );
       }
       else
       {
-        gfx.lineTo(vertices[i * 2] + _point.x, vertices[i * 2 + 1] + _point.y);
+        gfx.lineTo(
+          vertices[i * 2] + _point.x,
+          vertices[i * 2 + 1] + _point.y
+        );
       }
     }
   }
+
   #end
 
+  /**
+   * Whether the button was just released.
+   */
   inline function get_justReleased():Bool
   {
-    return input.justReleased;
+    return input != null && input.justReleased;
   }
 
+  /**
+   * Whether the button is released.
+   */
   inline function get_released():Bool
   {
-    return input.released;
+    return input != null && input.released;
   }
 
+  /**
+   * Whether the button is pressed.
+   */
   inline function get_pressed():Bool
   {
-    return input.pressed;
+    return input != null && input.pressed;
   }
 
+  /**
+   * Whether the button was just pressed.
+   */
   inline function get_justPressed():Bool
   {
-    return input.justPressed;
+    return input != null && input.justPressed;
   }
 
+  /**
+   * Returns the current touch.
+   */
   inline function get_currentTouch():Null<FlxTouch>
   {
+    if (touchID < 0)
+    {
+      return null;
+    }
+
     return FlxG.touches.getByID(touchID);
   }
 }
