@@ -82,47 +82,54 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   public var currentTouch(get, never):Null<FlxTouch>;
 
   /**
-   * Objects that block the button input.
-   */
-  public var deadZones:Array<FunkinSprite> = [];
-
-  /**
    * Whether the button should be released if the touch leaves its bounds.
    */
   public var limitToBounds:Bool = true;
 
   /**
-   * Radius for circular buttons.
+   * A radius for circular buttons.
+   *
+   * If this radius is larger than 0 then the overlap check
+   * will check if the touch point is inside this radius.
    */
   public var radius:Float = 0;
 
   /**
-   * Polygon hitbox.
+   * The vertices of the polygon defining the button's hitbox.
+   *
+   * The array should contain points in the format:
+   * [x1, y1, x2, y2, ...].
+   *
+   * If the array is empty or invalid, the default hitbox is used.
    */
   public var polygon:Null<Array<Float>> = null;
 
   /**
-   * Input associated with this button.
+   * The input associated with the button.
    */
   var input:FlxInput<Int>;
 
   /**
-   * Input currently pressing this button.
+   * The input currently pressing this button.
    */
   var currentInput:IFlxInput;
 
   /**
-   * ID of the touch currently pressing this button.
+   * The ID of the touch object that pressed this button.
    */
   var touchID:Int = -1;
 
   /**
-   * Whether onDownHandler() should be ignored.
+   * Whether the button should skip calling onDownHandler()
+   * on touch.pressed.
    */
   public var ignoreDownHandler:Bool = false;
 
   /**
    * Creates a new FunkinButton.
+   *
+   * @param x The x position of the button.
+   * @param y The y position of the button.
    */
   public function new(x:Float = 0, y:Float = 0):Void
   {
@@ -144,16 +151,16 @@ class FunkinButton extends FunkinSprite implements IFlxInput
 
   /**
    * Called when the button is destroyed.
-   *
-   * Fixed to safely remove the button from the active touch map
-   * and release its input before destroying the sprite.
    */
   override public function destroy():Void
   {
-    // Make sure this button is removed from the touch map.
+    // Remove this button from the touch map.
     if (touchID >= 0)
     {
-      if (buttonsTouchID.exists(touchID) && buttonsTouchID.get(touchID) == this)
+      if (
+        buttonsTouchID.exists(touchID)
+        && buttonsTouchID.get(touchID) == this
+      )
       {
         buttonsTouchID.remove(touchID);
       }
@@ -161,33 +168,33 @@ class FunkinButton extends FunkinSprite implements IFlxInput
       touchID = -1;
     }
 
-    // Release the input before destroying it.
+    // Release and clear the input.
     if (input != null)
     {
       input.release();
       input = null;
     }
 
-    // Remove the current input reference.
+    // Clear current input.
     currentInput = null;
 
-    // Clear dead zones.
-    deadZones = [];
-
-    // Reset the button state.
+    // Reset state.
     status = FunkinButtonStatus.NORMAL;
 
     super.destroy();
   }
 
   /**
-   * Handles touch input.
+   * Called by the game loop automatically.
+   *
+   * Handles touch over and click detection.
    */
   override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
     #if FLX_POINTER_INPUT
+
     if (visible)
     {
       final overlapFound:Bool = checkTouchOverlap();
@@ -196,26 +203,46 @@ class FunkinButton extends FunkinSprite implements IFlxInput
         (currentTouch != null && currentTouch.justReleased);
 
       if (
-        (currentInput != null && currentInput.justReleased
-        || (!limitToBounds && touchReleased))
-        && overlapFound
+        (
+          currentInput != null
+          && currentInput.justReleased
+        )
+        || (
+          !limitToBounds
+          && touchReleased
+        )
       )
       {
-        onUpHandler();
+        if (overlapFound)
+        {
+          onUpHandler();
+        }
       }
 
       if (
         status != FunkinButtonStatus.NORMAL
-        && (!overlapFound
-        || (currentInput != null && currentInput.justReleased))
+        && (
+          !overlapFound
+          || (
+            currentInput != null
+            && currentInput.justReleased
+          )
+        )
       )
       {
-        if (limitToBounds || (!limitToBounds && touchReleased))
+        if (
+          limitToBounds
+          || (
+            !limitToBounds
+            && touchReleased
+          )
+        )
         {
           onOutHandler();
         }
       }
     }
+
     #end
 
     if (input != null)
@@ -225,12 +252,14 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   }
 
   /**
-   * Checks whether a touch overlaps this button.
+   * Checks if a touch overlaps the button.
    */
   function checkTouchOverlap(?touch:FlxTouch):Bool
   {
     final touches:Array<FlxTouch> =
-      touch == null ? FlxG.touches.list : [touch];
+      touch == null
+        ? FlxG.touches.list
+        : [touch];
 
     for (camera in cameras)
     {
@@ -238,17 +267,6 @@ class FunkinButton extends FunkinSprite implements IFlxInput
       {
         final worldPos:FlxPoint =
           touch.getWorldPosition(camera, _point);
-
-        for (zone in deadZones)
-        {
-          if (
-            zone != null
-            && zone.overlapsPoint(worldPos, true, camera)
-          )
-          {
-            return false;
-          }
-        }
 
         function updateTouchID():Void
         {
@@ -285,25 +303,44 @@ class FunkinButton extends FunkinSprite implements IFlxInput
           && polygon.length % 2 == 0
         )
         {
-          if (polygonOverlapsPoint(worldPos, false, camera))
+          if (
+            polygonOverlapsPoint(
+              worldPos,
+              false,
+              camera
+            )
+          )
           {
             updateTouchID();
             return true;
           }
         }
-        // Circle hitbox.
+
+        // Circular hitbox.
         else if (radius > 0)
         {
-          if (circleOverlapsPoint(worldPos, camera))
+          if (
+            circleOverlapsPoint(
+              worldPos,
+              camera
+            )
+          )
           {
             updateTouchID();
             return true;
           }
         }
-        // Default rectangular hitbox.
+
+        // Normal rectangular hitbox.
         else
         {
-          if (overlapsPoint(worldPos, true, camera))
+          if (
+            overlapsPoint(
+              worldPos,
+              true,
+              camera
+            )
+          )
           {
             updateTouchID();
             return true;
@@ -328,18 +365,30 @@ class FunkinButton extends FunkinSprite implements IFlxInput
       camera = FlxG.camera;
     }
 
-    final xPos:Float = point.x - camera.scroll.x;
-    final yPos:Float = point.y - camera.scroll.y;
+    final xPos:Float =
+      point.x - camera.scroll.x;
 
-    getScreenPosition(_point, camera);
+    final yPos:Float =
+      point.y - camera.scroll.y;
+
+    getScreenPosition(
+      _point,
+      camera
+    );
 
     point.putWeak();
 
     final distanceX:Float =
-      xPos - (_point.x + (width / 2));
+      xPos - (
+        _point.x
+        + (width / 2)
+      );
 
     final distanceY:Float =
-      yPos - (_point.y + (height / 2));
+      yPos - (
+        _point.y
+        + (height / 2)
+      );
 
     final distance:Float =
       Math.sqrt(
@@ -382,17 +431,21 @@ class FunkinButton extends FunkinSprite implements IFlxInput
       camera = FlxG.camera;
     }
 
-    final pos:FlxPoint = FlxPoint.weak(
-      point.x - camera.scroll.x,
-      point.y - camera.scroll.y
-    );
+    final pos:FlxPoint =
+      FlxPoint.weak(
+        point.x - camera.scroll.x,
+        point.y - camera.scroll.y
+      );
 
     point.putWeak();
 
     return isPointInPolygon(
       polygon,
       pos,
-      getScreenPosition(_point, camera)
+      getScreenPosition(
+        _point,
+        camera
+      )
     );
   }
 
@@ -417,17 +470,29 @@ class FunkinButton extends FunkinSprite implements IFlxInput
 
     for (i in 0...numsPoints)
     {
-      final vertex1:FlxPoint = FlxPoint.weak(
-        vertices[i * 2] + offset.x,
-        vertices[i * 2 + 1] + offset.y
-      );
+      final vertex1:FlxPoint =
+        FlxPoint.weak(
+          vertices[i * 2] + offset.x,
+          vertices[i * 2 + 1] + offset.y
+        );
 
-      final vertex2:FlxPoint = FlxPoint.weak(
-        vertices[(i + 1) % numsPoints * 2] + offset.x,
-        vertices[(i + 1) % numsPoints * 2 + 1] + offset.y
-      );
+      final vertex2:FlxPoint =
+        FlxPoint.weak(
+          vertices[
+            ((i + 1) % numsPoints) * 2
+          ] + offset.x,
+          vertices[
+            ((i + 1) % numsPoints) * 2 + 1
+          ] + offset.y
+        );
 
-      if (checkRayIntersection(vertex1, vertex2, point))
+      if (
+        checkRayIntersection(
+          vertex1,
+          vertex2,
+          point
+        )
+      )
       {
         inside = !inside;
       }
@@ -449,7 +514,8 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   ):Bool
   {
     final result:Bool =
-      (vertex1.y > point.y) != (vertex2.y > point.y)
+      (vertex1.y > point.y)
+      != (vertex2.y > point.y)
       && point.x <
         (
           vertex1.x
@@ -486,7 +552,9 @@ class FunkinButton extends FunkinSprite implements IFlxInput
   /**
    * Updates the button status.
    */
-  function updateStatus(newInput:IFlxInput):Void
+  function updateStatus(
+    newInput:IFlxInput
+  ):Void
   {
     if (newInput.justPressed)
     {
@@ -602,13 +670,18 @@ class FunkinButton extends FunkinSprite implements IFlxInput
         return;
       }
 
-      getScreenPosition(_point, camera);
+      getScreenPosition(
+        _point,
+        camera
+      );
 
       final gfx:Graphics =
         beginDrawDebug(camera);
 
       final boundingBoxColor:Null<FlxColor> =
-        getDebugBoundingBoxColor(allowCollisions);
+        getDebugBoundingBoxColor(
+          allowCollisions
+        );
 
       if (boundingBoxColor != null)
       {
@@ -632,13 +705,18 @@ class FunkinButton extends FunkinSprite implements IFlxInput
         return;
       }
 
-      getScreenPosition(_point, camera);
+      getScreenPosition(
+        _point,
+        camera
+      );
 
       final gfx:Graphics =
         beginDrawDebug(camera);
 
       final boundingBoxColor:Null<FlxColor> =
-        getDebugBoundingBoxColor(allowCollisions);
+        getDebugBoundingBoxColor(
+          allowCollisions
+        );
 
       if (boundingBoxColor != null)
       {
@@ -664,7 +742,12 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     color:FlxColor
   ):Void
   {
-    gfx.lineStyle(2, color, 0.75);
+    gfx.lineStyle(
+      2,
+      color,
+      0.75
+    );
+
     gfx.drawCircle(
       radius,
       radius,
@@ -681,9 +764,15 @@ class FunkinButton extends FunkinSprite implements IFlxInput
     color:FlxColor
   ):Void
   {
-    gfx.lineStyle(2, color, 0.75);
+    gfx.lineStyle(
+      2,
+      color,
+      0.75
+    );
 
-    for (i in 0...Math.floor(vertices.length / 2))
+    for (
+      i in 0...Math.floor(vertices.length / 2)
+    )
     {
       if (i == 0)
       {
@@ -709,7 +798,8 @@ class FunkinButton extends FunkinSprite implements IFlxInput
    */
   inline function get_justReleased():Bool
   {
-    return input != null && input.justReleased;
+    return input != null
+      && input.justReleased;
   }
 
   /**
@@ -717,7 +807,8 @@ class FunkinButton extends FunkinSprite implements IFlxInput
    */
   inline function get_released():Bool
   {
-    return input != null && input.released;
+    return input != null
+      && input.released;
   }
 
   /**
@@ -725,7 +816,8 @@ class FunkinButton extends FunkinSprite implements IFlxInput
    */
   inline function get_pressed():Bool
   {
-    return input != null && input.pressed;
+    return input != null
+      && input.pressed;
   }
 
   /**
@@ -733,7 +825,8 @@ class FunkinButton extends FunkinSprite implements IFlxInput
    */
   inline function get_justPressed():Bool
   {
-    return input != null && input.justPressed;
+    return input != null
+      && input.justPressed;
   }
 
   /**
