@@ -150,7 +150,7 @@ class FunkinButton extends FunkinSprite implements IFlxInput
    */
   override public function destroy():Void
   {
-    deadZones = FlxDestroyUtil.destroyArray(deadZones);
+    deadZones = [];
     currentInput = null;
     input = null;
 
