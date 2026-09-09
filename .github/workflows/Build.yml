@@ -2,12 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches:
-      - "**"
   workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-22.04
 
     steps:
@@ -16,73 +14,46 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
-          haxe-version: "4.3.7"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses || true
-
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-29"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
-          sdkmanager "ndk;29.0.13113456"
-
-      - name: Configure Android
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          haxe-version: '4.3.7'
 
       - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
-      - name: Install Funkin HMM
+      - name: Install Haxelib dependencies
         run: |
-          haxelib --global install hmm
-          haxelib --global run hmm setup
+          haxelib install hxcpp
+          haxelib install lime
+          haxelib run lime setup
 
       - name: Install project dependencies
         run: |
-          haxelib run hmm install
-
-      - name: Show installed libraries
-        run: |
-          haxelib list
-
-      - name: Setup Lime
-        run: |
-          haxelib run lime setup
-
-      - name: Setup Lime Android
-        run: |
-          haxelib run lime setup android
+          if [ -f haxelib.json ]; then
+            haxelib install haxelib.json
+          fi
 
       - name: Build Android
         run: |
-          haxelib run lime build android -release -DEXCLUDE_ARMV7
+          haxelib run lime build android -release
 
       - name: Find APK
         run: |
-          echo "APK encontrado:"
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Funkin-Sun-Android
-          path: "**/*.apk"
+          name: Android-APK
+          path: |
+            export/**/*.apk
+            export/**/**/*.apk
           if-no-files-found: error
