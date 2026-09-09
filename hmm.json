@@ -21,6 +21,13 @@
       "url": "https://github.com/FunkinCrew/extension-admob"
     },
     {
+      "name": "hxrpc",
+      "type": "git",
+      "dir": null,
+      "ref": "main",
+      "url": "https://github.com/BrenninhoTools/hxrpc.git"
+    },
+    {
       "name": "extension-agesignals",
       "type": "git",
       "ref": "dd3f56ccbb313a43d40cba8826fca2b1ec7c7e5d",
@@ -30,6 +37,16 @@
       "name": "extension-androidtools",
       "type": "haxelib",
       "version": "2.2.2"
+    },
+    {
+      "name": "foxlite",
+      "type": "haxelib",
+      "version": "0.1.1"
+    },
+    {
+      "name": "away3d",
+      "type": "haxelib",
+      "version": "5.0.9"
     },
     {
       "name": "dox",
@@ -152,6 +169,13 @@
       "dir": null,
       "ref": "20e72cc68c823496359775ac1f06500e67f189d5",
       "url": "https://github.com/nadako/hxjsonast/"
+    },
+    {
+      "name": "hxlua",
+      "type": "git",
+      "dir": null,
+      "ref": "dab084bf87e6200c504125e5f780e71ffe95d50b",
+      "url": "https://github.com/MAJigsaw77/hxlua"
     },
     {
       "name": "hxgamemode",
