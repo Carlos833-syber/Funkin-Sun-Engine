@@ -4,6 +4,9 @@ import flixel.FlxG;
 import flixel.FlxObject;
 import flixel.FlxSprite;
 import flixel.math.FlxPoint;
+import flixel.text.FlxText;
+import flixel.tweens.FlxEase;
+import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 
 import funkin.ui.MusicBeatSubState;
@@ -25,444 +28,364 @@ import funkin.util.HapticUtil;
 
 class DebugMenuSubState extends MusicBeatSubState
 {
-var items;
-var camFocusPoint;
+  var items:TextMenuList;
+  var camFocusPoint:FlxObject;
 
-#if mobile
-var touchableItems<{item, callback:Void->Void}> = [];
-var mobileHint<FlxText> = null;
-#end
+  #if mobile
+  var mobileHint:FlxText = null;
+  #end
 
-override function create()
-{
-FlxTransitionableState.skipNextTransIn = true;
-
-super.create();
-
-bgColor = 0x00000000;
-
-// Camera focus point.
-camFocusPoint = new FlxObject(0, 0);
-add(camFocusPoint);
-
-FlxG.camera.follow(camFocusPoint, null, 0.06);
-
-// Green debug menu background.
-var menuBG = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
-
-menuBG.color = 0xFF4CAF50;
-
-menuBG.setGraphicSize(
-  Std.int(
-    menuBG.width
-    * 1.1
-    * FullScreenScaleMode.wideScale.x
-  )
-);
-
-menuBG.updateHitbox();
-menuBG.screenCenter();
-menuBG.scrollFactor.set(0, 0);
-
-add(menuBG);
-
-// Menu list.
-items = new TextMenuList();
-
-items.onChange.add(onMenuChange);
-
-add(items);
-
-/*
- * DEBUG MENU OPTIONS
- */
-
-#if FEATURE_CHART_EDITOR
-createItem("CHART EDITOR", openChartEditor);
-#end
-
-#if FEATURE_ANIMATION_EDITOR
-createItem("ANIMATION EDITOR", openAnimationEditor);
-#end
-
-#if FEATURE_STAGE_EDITOR
-createItem("STAGE EDITOR", openStageEditor);
-#end
-
-#if FEATURE_RESULTS_DEBUG
-createItem("RESULTS SCREEN DEBUG", openTestResultsScreen);
-#end
-
-#if sys
-createItem("OPEN CRASH LOG FOLDER", openLogFolder);
-#end
-
-/*
- * Prevent a crash if no debug options were compiled in.
- */
-if (items.members.length > 0)
-{
-  onMenuChange(items.members[0]);
-
-  FlxG.camera.focusOn(
-    new FlxPoint(
-      camFocusPoint.x,
-      camFocusPoint.y + 500
-    )
-  );
-}
-
-#if FEATURE_HAXEUI
-/*
- * Prevent editor UI styles from inheriting
- * the normal game's user stylesheet.
- */
-haxe.ui.Toolkit.styleSheet.clear("user");
-#end
-
-#if mobile
-
-/*
- * Android / mobile back button.
- */
-addBackButton(
-  FlxG.width - 230,
-  FlxG.height - 200,
-  FlxColor.WHITE,
-  exitDebugMenu,
-  1.0
-);
-
-if (backButton != null)
-{
-  backButton.onConfirmStart.add(() ->
+  override function create():Void
   {
-    FunkinSound.playOnce(
-      Paths.sound('cancelMenu')
+    FlxTransitionableState.skipNextTransIn = true;
+
+    super.create();
+
+    bgColor = 0x00000000;
+
+    // Camera focus point.
+    camFocusPoint = new FlxObject(0, 0);
+    add(camFocusPoint);
+
+    FlxG.camera.follow(camFocusPoint, null, 0.06);
+
+    // Debug menu background.
+    var menuBG:FlxSprite = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
+
+    menuBG.color = 0xFF4CAF50;
+
+    menuBG.setGraphicSize(
+      Std.int(
+        menuBG.width
+        * 1.1
+        * FullScreenScaleMode.wideScale.x
+      )
     );
-  });
-}
 
-/*
- * Mobile instruction.
- */
-mobileHint = new FlxText(
-  0,
-  FlxG.height - 40,
-  FlxG.width,
-  'Tap an option to select it - swipe down to go back',
-  16
-);
+    menuBG.updateHitbox();
+    menuBG.screenCenter();
+    menuBG.scrollFactor.set(0, 0);
 
-mobileHint.alignment = CENTER;
-mobileHint.color = 0xFFAAAAAA;
-mobileHint.scrollFactor.set(0, 0);
+    add(menuBG);
 
-add(mobileHint);
+    // Menu list.
+    items = new TextMenuList();
+    items.onChange.add(onMenuChange);
 
-#end
+    add(items);
 
-}
+    /*
+     * DEBUG MENU OPTIONS
+     */
 
-/**
+    #if FEATURE_CHART_EDITOR
+    createItem(
+      "CHART EDITOR",
+      openChartEditor
+    );
+    #end
 
-Moves the camera to the currently selected menu item.
-*/
-function onMenuChange(selected)
-{
-if (selected == null)
-{
-return;
-}
+    #if FEATURE_ANIMATION_EDITOR
+    createItem(
+      "ANIMATION EDITOR",
+      openAnimationEditor
+    );
+    #end
 
-camFocusPoint.setPosition(
+    #if FEATURE_STAGE_EDITOR
+    createItem(
+      "STAGE EDITOR",
+      openStageEditor
+    );
+    #end
 
-  selected.x + selected.width / 2,
-  selected.y + selected.height / 2
-);
+    #if FEATURE_RESULTS_DEBUG
+    createItem(
+      "RESULTS SCREEN DEBUG",
+      openTestResultsScreen
+    );
+    #end
 
-}
+    #if sys
+    createItem(
+      "OPEN CRASH LOG FOLDER",
+      openLogFolder
+    );
+    #end
 
-override function update(elapsed)
-{
-try
-{
-updateDebugMenu(elapsed);
-}
-catch (e)
-{
-FlxG.log.error(
-'DebugMenuSubState encountered an error and had to close: $e'
-);
-
-  exitDebugMenu();
-}
-
-}
-
-function updateDebugMenu(elapsed)
-{
-super.update(elapsed);
-
-#if mobile
-
-if (backButton != null)
-{
-  backButton.active = true;
-  backButton.enabled = true;
-}
-
-handleTouchInput();
-
-#end
-
-if (controls.BACK_P)
-{
-  FunkinSound.playOnce(
-    Paths.sound('cancelMenu')
-  );
-
-  exitDebugMenu();
-}
-
-}
-
-#if mobile
-
-/**
-
-Handles Android touch input.
-*/
-function handleTouchInput()
-{
-if (
-TouchUtil.justPressed
-&& !ControlsHandler.usingExternalInputDevice
-)
-{
-for (entry in touchableItems)
-{
-if (
-TouchUtil.overlaps(
-entry.item,
-FlxG.camera
-)
-)
-{
-activateTouchedItem(
-entry.item,
-entry.callback
-);
-
- break;
-
-}
-}
-}
-
-/*
-
- * Swipe down = go back.
- */
-if (
-  SwipeUtil.swipeDown
-  && !ControlsHandler.usingExternalInputDevice
-)
-{
-  FunkinSound.playOnce(
-    Paths.sound('cancelMenu')
-  );
-
-  exitDebugMenu();
-}
-
-}
-
-/**
-
-Activates a menu item using touch.
-*/
-function activateTouchedItem(
-item,
-callback:Void->Void
-)
-{
-if (item == null)
-{
-return;
-}
-
-onMenuChange(item);
-
-HapticUtil.vibrate(
-  0,
-  0.01,
-  0.5
-);
-
-FunkinSound.playOnce(
-  Paths.sound('confirmMenu')
-);
-
-FlxTween.cancelTweensOf(item);
-
-FlxTween.tween(
-  item,
-  {
-    "scale.x": 0.92,
-    "scale.y": 0.92
-  },
-  0.08,
-  {
-    ease: FlxEase.quadOut,
-    onComplete: (_) ->
+    /*
+     * Prevent a crash if no debug options exist.
+     */
+    if (items.members.length > 0)
     {
-      FlxTween.tween(
-        item,
-        {
-          "scale.x": 1,
-          "scale.y": 1
-        },
-        0.12,
-        {
-          ease: FlxEase.quadOut
-        }
+      onMenuChange(items.members[0]);
+
+      FlxG.camera.focusOn(
+        new FlxPoint(
+          camFocusPoint.x,
+          camFocusPoint.y + 500
+        )
+      );
+    }
+
+    #if FEATURE_HAXEUI
+    haxe.ui.Toolkit.styleSheet.clear("user");
+    #end
+
+    #if mobile
+
+    /*
+     * Android/mobile back button.
+     */
+    addBackButton(
+      FlxG.width - 230,
+      FlxG.height - 200,
+      FlxColor.WHITE,
+      exitDebugMenu,
+      1.0
+    );
+
+    if (backButton != null)
+    {
+      backButton.onConfirmStart.add(() ->
+      {
+        FunkinSound.playOnce(
+          Paths.sound('cancelMenu')
+        );
+      });
+    }
+
+    /*
+     * Mobile instruction.
+     */
+    mobileHint = new FlxText(
+      0,
+      FlxG.height - 40,
+      FlxG.width,
+      'Tap an option to select it - swipe down to go back',
+      16
+    );
+
+    mobileHint.alignment = CENTER;
+    mobileHint.color = 0xFFAAAAAA;
+    mobileHint.scrollFactor.set(0, 0);
+
+    add(mobileHint);
+
+    #end
+  }
+
+  /**
+   * Moves the camera to the currently selected menu item.
+   */
+  function onMenuChange(selected:Dynamic):Void
+  {
+    if (selected == null)
+    {
+      return;
+    }
+
+    camFocusPoint.setPosition(
+      selected.x + selected.width / 2,
+      selected.y + selected.height / 2
+    );
+  }
+
+  override function update(elapsed:Float):Void
+  {
+    try
+    {
+      updateDebugMenu(elapsed);
+    }
+    catch (e)
+    {
+      FlxG.log.error(
+        'DebugMenuSubState encountered an error and had to close: $e'
       );
 
-      callback();
+      exitDebugMenu();
     }
   }
-);
 
-}
+  function updateDebugMenu(elapsed:Float):Void
+  {
+    super.update(elapsed);
 
-#end
+    #if mobile
 
-/**
+    if (backButton != null)
+    {
+      backButton.active = true;
+      backButton.enabled = true;
+    }
 
-Creates a debug menu item.
-*/
-function createItem(
-name,
-callback:Void->Void,
-fireInstantly = false
-)
-{
-var item = items.createItem(
-0,
-100 + items.length * 100,
-name,
-BOLD,
-callback
-);
+    handleTouchInput();
 
-item.fireInstantly = fireInstantly;
+    #end
 
-item.screenCenter(X);
+    if (controls.BACK_P)
+    {
+      FunkinSound.playOnce(
+        Paths.sound('cancelMenu')
+      );
 
-#if mobile
+      exitDebugMenu();
+    }
+  }
 
-touchableItems.push({
-  item: item,
-  callback: callback
-});
+  #if mobile
 
-#end
+  /**
+   * Handles Android touch input.
+   *
+   * TextMenuList already handles the menu item
+   * callbacks, so we do not need a separate
+   * touchableItems array here.
+   */
+  function handleTouchInput():Void
+  {
+    if (
+      SwipeUtil.swipeDown
+      && !ControlsHandler.usingExternalInputDevice
+    )
+    {
+      FunkinSound.playOnce(
+        Paths.sound('cancelMenu')
+      );
 
-return item;
+      exitDebugMenu();
 
-}
+      return;
+    }
 
-#if FEATURE_CHART_EDITOR
+    /*
+     * Touch selection.
+     *
+     * TextMenuList handles its own item activation.
+     * We only provide a small visual/haptic response
+     * when the player touches the screen.
+     */
+    if (
+      TouchUtil.justPressed
+      && !ControlsHandler.usingExternalInputDevice
+    )
+    {
+      HapticUtil.vibrate(
+        0,
+        0.01,
+        0.5
+      );
+    }
+  }
 
-function openChartEditor()
-{
-FlxTransitionableState.skipNextTransIn = true;
+  #end
 
-FlxG.switchState(
-  () -> new ChartEditorState()
-);
+  /**
+   * Creates a debug menu item.
+   */
+  function createItem(
+    name:String,
+    callback:Void->Void,
+    fireInstantly:Bool = false
+  ):Dynamic
+  {
+    var item = items.createItem(
+      0,
+      100 + items.length * 100,
+      name,
+      BOLD,
+      callback
+    );
 
-}
+    item.fireInstantly = fireInstantly;
 
-#end
+    item.screenCenter(X);
 
-#if FEATURE_ANIMATION_EDITOR
+    return item;
+  }
 
-function openAnimationEditor()
-{
-FlxTransitionableState.skipNextTransIn = true;
+  #if FEATURE_CHART_EDITOR
 
-FlxG.switchState(
-  () -> new funkin.ui.debug.anim.DebugBoundingState()
-);
+  function openChartEditor():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
 
-}
+    FlxG.switchState(
+      () -> new ChartEditorState()
+    );
+  }
 
-#end
+  #end
 
-#if FEATURE_STAGE_EDITOR
+  #if FEATURE_ANIMATION_EDITOR
 
-function openStageEditor()
-{
-FlxTransitionableState.skipNextTransIn = true;
+  function openAnimationEditor():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
 
-FlxG.switchState(
-  () -> new funkin.ui.debug.stageeditor.StageEditorState()
-);
+    FlxG.switchState(
+      () -> new funkin.ui.debug.anim.DebugBoundingState()
+    );
+  }
 
-}
+  #end
 
-#end
+  #if FEATURE_STAGE_EDITOR
 
-#if FEATURE_RESULTS_DEBUG
+  function openStageEditor():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
 
-function openTestResultsScreen()
-{
-FlxTransitionableState.skipNextTransIn = true;
+    FlxG.switchState(
+      () -> new funkin.ui.debug.stageeditor.StageEditorState()
+    );
+  }
 
-FlxG.switchState(
-  () -> new funkin.ui.debug.results.ResultsDebugSubState()
-);
+  #end
 
-}
+  #if FEATURE_RESULTS_DEBUG
 
-#end
+  function openTestResultsScreen():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
 
-#if sys
+    FlxG.switchState(
+      () -> new funkin.ui.debug.results.ResultsDebugSubState()
+    );
+  }
 
-function openLogFolder()
-{
-FileUtil.openFolder(
-CrashHandler.LOG_FOLDER
-);
-}
+  #end
 
-#end
+  #if sys
 
-function exitDebugMenu()
-{
-FlxTransitionableState.skipNextTransIn = true;
+  function openLogFolder():Void
+  {
+    FileUtil.openFolder(
+      CrashHandler.LOG_FOLDER
+    );
+  }
 
-this.close();
+  #end
 
-}
+  function exitDebugMenu():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
 
-override public function destroy()
-{
-#if mobile
+    this.close();
+  }
 
-touchableItems = [];
+  override public function destroy():Void
+  {
+    #if mobile
 
-if (mobileHint != null)
-{
-  mobileHint.destroy();
-  mobileHint = null;
-}
+    if (mobileHint != null)
+    {
+      mobileHint.destroy();
+      mobileHint = null;
+    }
 
-#end
+    #end
 
-super.destroy();
-
-}
+    super.destroy();
+  }
 }
