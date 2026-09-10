@@ -1,7 +1,6 @@
 package funkin.mobile.ui.options;
 
 import flixel.addons.transition.FlxTransitionableState;
-import flixel.math.FlxMath;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
@@ -10,15 +9,18 @@ import flixel.FlxG;
 import funkin.mobile.ui.options.objects.SchemeMenuButton;
 import funkin.mobile.ui.options.objects.HitboxShowcase;
 import funkin.mobile.ui.FunkinHitbox;
-import funkin.mobile.ui.FunkinHint;
+
 import funkin.util.TouchUtil;
 import funkin.util.MathUtil;
+
 import funkin.ui.MusicBeatSubState;
 import funkin.ui.AtlasText;
 import funkin.ui.FullScreenScaleMode;
+
 import funkin.graphics.shaders.HSVShader;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.FunkinCamera;
+
 import funkin.audio.FunkinSound;
 import funkin.Preferences;
 
@@ -30,14 +32,16 @@ import funkin.Preferences;
 class ControlsSchemeMenu extends MusicBeatSubState
 {
   var schemeNameText:AtlasText;
+
   var camButtons:FunkinCamera;
   var camHitboxes:FunkinCamera;
+
   var currentButton:SchemeMenuButton;
 
-  // CORRECT HAXE GENERIC DECLARATION
   var hitboxShowcases:FlxTypedSpriteGroup<HitboxShowcase>;
 
   var itemNavHitbox:FunkinSprite;
+
   var isInDemo:Bool = false;
 
   final availableSchemes:Array<String> = [
@@ -49,6 +53,7 @@ class ControlsSchemeMenu extends MusicBeatSubState
   ];
 
   var currentIndex:Int = 0;
+
   var dragStartingX:Int = 0;
   var dragDistance:Int = 0;
 
@@ -65,7 +70,8 @@ class ControlsSchemeMenu extends MusicBeatSubState
     hsv.saturation = 0.9;
     hsv.value = 3.6;
 
-    final menuBG:FunkinSprite = FunkinSprite.create('menuBG');
+    final menuBG:FunkinSprite =
+      FunkinSprite.create('menuBG');
 
     menuBG.shader = hsv;
 
@@ -81,10 +87,15 @@ class ControlsSchemeMenu extends MusicBeatSubState
 
     add(menuBG);
 
-    // Find currently selected control scheme.
+    /*
+     * Find the currently selected scheme.
+     */
     for (i in 0...availableSchemes.length)
     {
-      if (availableSchemes[i] == Preferences.controlsScheme)
+      if (
+        availableSchemes[i]
+        == Preferences.controlsScheme
+      )
       {
         currentIndex = i;
         break;
@@ -119,7 +130,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
       FlxG.cameras.remove(camControls);
     }
 
-    camControls = new FunkinCamera('camControls');
+    camControls =
+      new FunkinCamera('camControls');
+
     camControls.bgColor = 0x0;
 
     FlxG.cameras.add(
@@ -127,7 +140,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
       false
     );
 
-    camButtons = new FunkinCamera('camButtons');
+    camButtons =
+      new FunkinCamera('camButtons');
+
     camButtons.bgColor = 0x0;
 
     FlxG.cameras.add(
@@ -135,7 +150,8 @@ class ControlsSchemeMenu extends MusicBeatSubState
       false
     );
 
-    camHitboxes = new FunkinCamera('camHitboxes');
+    camHitboxes =
+      new FunkinCamera('camHitboxes');
 
     camHitboxes.setScale(
       0.5,
@@ -157,7 +173,11 @@ class ControlsSchemeMenu extends MusicBeatSubState
 
     hitboxShowcases.x =
       (-1500 * currentIndex)
-      + (-1500 / (availableSchemes.length + 1) * currentIndex);
+      + (
+        -1500
+        / (availableSchemes.length + 1)
+        * currentIndex
+      );
 
     for (i in 0...availableSchemes.length)
     {
@@ -176,7 +196,10 @@ class ControlsSchemeMenu extends MusicBeatSubState
           FlxG.width * -0.16
           + (
             1500
-            * (i * FullScreenScaleMode.wideScale.x)
+            * (
+              i
+              * FullScreenScaleMode.wideScale.x
+            )
           )
         );
 
@@ -195,8 +218,12 @@ class ControlsSchemeMenu extends MusicBeatSubState
       new FunkinSprite(
         FlxG.width * 0.295
       ).makeSolidColor(
-        Std.int(FlxG.width * 0.25),
-        Std.int(FlxG.height * 0.25),
+        Std.int(
+          FlxG.width * 0.25
+        ),
+        Std.int(
+          FlxG.height * 0.25
+        ),
         FlxColor.GREEN
       );
 
@@ -211,7 +238,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
     add(itemNavHitbox);
   }
 
-  function createButton(isDemoScreen:Bool):Void
+  function createButton(
+    isDemoScreen:Bool
+  ):Void
   {
     if (currentButton != null)
     {
@@ -248,7 +277,10 @@ class ControlsSchemeMenu extends MusicBeatSubState
 
   function onSelectHitbox():Void
   {
-    currentButton.busy = true;
+    if (currentButton != null)
+    {
+      currentButton.busy = true;
+    }
 
     Preferences.controlsScheme =
       availableSchemes[currentIndex];
@@ -276,7 +308,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
     );
 
     hitboxShowcases.forEach(
-      function(hitboxShowcase:HitboxShowcase)
+      function(
+        hitboxShowcase:HitboxShowcase
+      )
       {
         hitboxShowcase.visible = false;
       }
@@ -293,22 +327,27 @@ class ControlsSchemeMenu extends MusicBeatSubState
     );
 
     /*
-     * DeadZone support was intentionally removed.
+     * DeadZone was intentionally removed.
      *
-     * We only restore the arrow hint visibility here.
+     * We only restore the arrow hint alpha
+     * when using the arrow control scheme.
+     *
+     * The callback parameter is left untyped
+     * so this file does not depend on the
+     * exact package name of FunkinHint.
      */
-    hitbox.forEachAlive(
-      function(hint:FunkinHint)
-      {
-        if (
-          availableSchemes[currentIndex]
-          == FunkinHitbox.FunkinHitboxControlSchemes.Arrows
-        )
+    if (
+      availableSchemes[currentIndex]
+      == FunkinHitbox.FunkinHitboxControlSchemes.Arrows
+    )
+    {
+      hitbox.forEachAlive(
+        function(hint)
         {
           hint.alpha = 1;
         }
-      }
-    );
+      );
+    }
   }
 
   function onHitboxDemoBack():Void
@@ -326,7 +365,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
     );
 
     hitboxShowcases.forEach(
-      function(hitboxShowcase:HitboxShowcase)
+      function(
+        hitboxShowcase:HitboxShowcase
+      )
       {
         hitboxShowcase.visible = true;
       }
@@ -342,7 +383,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
     }
   }
 
-  function setSelection(index:Int):Void
+  function setSelection(
+    index:Int
+  ):Void
   {
     final newIndex:Int =
       Math.floor(
@@ -370,7 +413,9 @@ class ControlsSchemeMenu extends MusicBeatSubState
       availableSchemes[currentIndex];
 
     hitboxShowcases.forEach(
-      function(hitboxShowcase:HitboxShowcase)
+      function(
+        hitboxShowcase:HitboxShowcase
+      )
       {
         hitboxShowcase.selectionIndex =
           currentIndex;
@@ -426,18 +471,33 @@ class ControlsSchemeMenu extends MusicBeatSubState
     handleDrag();
 
     if (
-      TouchUtil.pressAction(itemNavHitbox)
+      TouchUtil.pressAction(
+        itemNavHitbox
+      )
     )
     {
-      hitboxShowcases.members[currentIndex].onPress();
+      if (
+        hitboxShowcases.members[currentIndex]
+        != null
+      )
+      {
+        hitboxShowcases
+          .members[currentIndex]
+          .onPress();
 
-      currentButton.busy = true;
+        if (currentButton != null)
+        {
+          currentButton.busy = true;
+        }
+      }
     }
   }
 
   var originX:Float = 0;
 
-  override public function update(elapsed:Float):Void
+  override public function update(
+    elapsed:Float
+  ):Void
   {
     super.update(elapsed);
 
@@ -508,10 +568,7 @@ class ControlsSchemeMenu extends MusicBeatSubState
 
   override public function destroy():Void
   {
-    if (currentButton != null)
-    {
-      currentButton = null;
-    }
+    currentButton = null;
 
     if (hitboxShowcases != null)
     {
