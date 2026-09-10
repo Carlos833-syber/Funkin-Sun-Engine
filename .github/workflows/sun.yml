@@ -7,16 +7,27 @@ permissions:
   contents: read
 
 jobs:
+
   android:
     name: Android
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Check branch
+        shell: bash
+        run: |
+          echo "Current branch:"
+          git branch --show-current
+
+          echo "Current commit:"
+          git rev-parse HEAD
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -31,6 +42,7 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
@@ -42,14 +54,17 @@ jobs:
         run: |
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
           echo "CXXFLAGS=-std=c++20" >> "$GITHUB_ENV"
 
       - name: Install Linux dependencies
         shell: bash
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             libdbus-1-dev \
             libasound2-dev \
@@ -87,11 +102,33 @@ jobs:
           rm -rf .haxelib
           haxelib run hmm install
 
+      - name: Show Haxe libraries
+        shell: bash
+        run: |
+          echo "=== HAXELIB ==="
+          haxelib list
+
+      - name: Check bump_build script
+        shell: bash
+        run: |
+          if [ -f "scripts/bump_build.py" ]; then
+            echo "WARNING: scripts/bump_build.py exists."
+            echo "It will NOT be executed by this workflow."
+          else
+            echo "scripts/bump_build.py does not exist."
+            echo "Continuing without build-number bump."
+          fi
+
       - name: Build hxcpp
         shell: bash
         run: |
           HXCPP_PATH=$(haxelib libpath hxcpp | tr -d '\n')
+
+          echo "hxcpp path:"
+          echo "$HXCPP_PATH"
+
           cd "$HXCPP_PATH/tools/hxcpp"
+
           haxe compile.hxml
 
       - name: Rebuild Lime
@@ -118,6 +155,16 @@ jobs:
         run: |
           haxelib run lime build android -release -DGITHUB_BUILD
 
+      - name: Find APK
+        shell: bash
+        run: |
+          echo "=== APK FILES ==="
+
+          find export \
+            -type f \
+            -name "*.apk" \
+            -print
+
       - name: Upload Android
         uses: actions/upload-artifact@v4
         with:
@@ -126,16 +173,27 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+
   windows:
     name: Windows
     runs-on: windows-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: Check branch
+        shell: pwsh
+        run: |
+          Write-Host "Current branch:"
+          git branch --show-current
+
+          Write-Host "Current commit:"
+          git rev-parse HEAD
 
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
@@ -153,13 +211,36 @@ jobs:
           if (Test-Path ".haxelib") {
             Remove-Item ".haxelib" -Recurse -Force
           }
+
           haxelib run hmm install
+
+      - name: Show Haxe libraries
+        shell: pwsh
+        run: |
+          haxelib list
+
+      - name: Check bump_build script
+        shell: pwsh
+        run: |
+          if (Test-Path "scripts/bump_build.py") {
+            Write-Host "WARNING: scripts/bump_build.py exists."
+            Write-Host "It will NOT be executed by this workflow."
+          }
+          else {
+            Write-Host "scripts/bump_build.py does not exist."
+            Write-Host "Continuing without build-number bump."
+          }
 
       - name: Build hxcpp
         shell: pwsh
         run: |
           $HXCPP_PATH = (haxelib libpath hxcpp).Trim()
+
+          Write-Host "hxcpp path:"
+          Write-Host $HXCPP_PATH
+
           Set-Location "$HXCPP_PATH\tools\hxcpp"
+
           haxe compile.hxml
 
       - name: Rebuild Lime Windows
@@ -171,6 +252,11 @@ jobs:
         shell: pwsh
         run: |
           haxelib run lime build windows -release -64 -DGITHUB_BUILD
+
+      - name: Find Windows build
+        shell: pwsh
+        run: |
+          Get-ChildItem "export/release/windows" -Recurse
 
       - name: Upload Windows
         uses: actions/upload-artifact@v4
